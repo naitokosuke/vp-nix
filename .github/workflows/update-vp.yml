@@ -1,0 +1,162 @@
+name: Update vite-plus version
+
+on:
+  schedule:
+    # Check every 12 hours (at 00:00 and 12:00 UTC)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  check-update:
+    runs-on: macos-latest # aarch64-darwin
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: vp-nix
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Get current version
+        id: current
+        run: |
+          set -e
+          CURRENT_VERSION=$(grep 'version = "' flake.nix | head -1 | sed 's/.*version = "\([^"]*\)".*/\1/')
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "Error: Could not extract current version from flake.nix"
+            exit 1
+          fi
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Get latest version from GitHub
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          LATEST_VERSION=$(gh api repos/voidzero-dev/vite-plus/tags --paginate --jq '.[].name' | sed 's/^v//' | sort -V | tail -1)
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "Error: Could not fetch latest version from GitHub"
+            exit 1
+          fi
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Latest version: $LATEST_VERSION"
+
+      - name: Check if update is needed
+        id: check
+        run: |
+          set -e
+          if [ "${{ steps.current.outputs.version }}" != "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update needed: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Already up to date"
+          fi
+
+      - name: Update flake.nix
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          set -e
+          NEW_VERSION="${{ steps.latest.outputs.version }}"
+
+          # Use GNU sed via Nix for compatibility with macOS
+          GSED="nix run nixpkgs#gnused --"
+
+          # Update version (only first occurrence)
+          $GSED -i "0,/version = \"[^\"]*\"/s//version = \"$NEW_VERSION\"/" flake.nix
+
+          # Get new source hash
+          echo "Fetching hash for version $NEW_VERSION..."
+          PREFETCH_HASH=$(nix-prefetch-url --unpack "https://github.com/voidzero-dev/vite-plus/archive/refs/tags/v${NEW_VERSION}.tar.gz")
+          if [ -z "$PREFETCH_HASH" ]; then
+            echo "Error: Failed to prefetch source"
+            exit 1
+          fi
+          NEW_HASH=$(nix hash to-sri --type sha256 "$PREFETCH_HASH")
+          if [ -z "$NEW_HASH" ]; then
+            echo "Error: Failed to convert hash to SRI format"
+            exit 1
+          fi
+          echo "Got hash: $NEW_HASH"
+
+          # Update source hash (only first occurrence)
+          $GSED -i "0,/hash = \"sha256-[^\"]*\"/s||hash = \"$NEW_HASH\"|" flake.nix
+
+          echo "Updated to version $NEW_VERSION with hash $NEW_HASH"
+
+      - name: Update CHANGELOG.md
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          set -e
+          NEW_VERSION="${{ steps.latest.outputs.version }}"
+          NEW_TAG_VERSION="${NEW_VERSION}-nix.1"
+          TODAY=$(date +%Y-%m-%d)
+
+          # Use GNU sed via Nix for compatibility with macOS
+          GSED="nix run nixpkgs#gnused --"
+
+          # Get previous release version from CHANGELOG (skip Unreleased)
+          PREV_TAG_VERSION=$($GSED -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | grep -v '^Unreleased$' | head -1)
+
+          # Insert new version section after ## [Unreleased]
+          $GSED -i "/^## \[Unreleased\]/a\\\\n## [${NEW_TAG_VERSION}] - ${TODAY}\\n\\n### Changed\\n\\n- Update vite-plus to v${NEW_VERSION}" CHANGELOG.md
+
+          # Update [Unreleased] compare link
+          $GSED -i "s|\[Unreleased\]: .*|[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/${NEW_TAG_VERSION}...HEAD|" CHANGELOG.md
+
+          # Add new version compare link before the previous version link
+          if [ -n "$PREV_TAG_VERSION" ]; then
+            $GSED -i "/^\[${PREV_TAG_VERSION}\]/i [${NEW_TAG_VERSION}]: https://github.com/naitokosuke/vp-nix/compare/${PREV_TAG_VERSION}...${NEW_TAG_VERSION}" CHANGELOG.md
+          else
+            # No previous version - add link at the end
+            echo "[${NEW_TAG_VERSION}]: https://github.com/naitokosuke/vp-nix/releases/tag/${NEW_TAG_VERSION}" >> CHANGELOG.md
+          fi
+
+          echo "Updated CHANGELOG.md with version ${NEW_TAG_VERSION}"
+
+      - name: Verify build
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          set -e
+          echo "Verifying build with updated flake.nix..."
+          nix build .#vite-plus --no-link --print-build-logs
+          echo "Build successful"
+
+      - name: Create Pull Request
+        if: steps.check.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.VP_NIX_PR_TOKEN }}
+          commit-message: "feat: update vite-plus to v${{ steps.latest.outputs.version }}"
+          title: "feat: update vite-plus to v${{ steps.latest.outputs.version }}"
+          body: |
+            ## 🚀 vite-plus version update
+
+            Updates vite-plus from `v${{ steps.current.outputs.version }}` to `v${{ steps.latest.outputs.version }}`
+
+            ### Changes
+            - Updated version in `flake.nix`
+            - Updated source hash
+            - Updated `CHANGELOG.md`
+
+            ### Links
+            - Tag: https://github.com/voidzero-dev/vite-plus/tree/v${{ steps.latest.outputs.version }}
+            - Compare: https://github.com/voidzero-dev/vite-plus/compare/v${{ steps.current.outputs.version }}...v${{ steps.latest.outputs.version }}
+
+            ---
+            🤖 This PR was automatically created by GitHub Actions
+          branch: update-vp-${{ steps.latest.outputs.version }}
+          delete-branch: true
+          labels: |
+            dependencies
+            automated

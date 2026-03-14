@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_build: ${{ steps.filter.outputs.needs_build }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for build-relevant changes
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Check if any non-doc files changed
+          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | grep -vcE '\.(md)$|^LICENSE$|^\.gitignore$' || true)
+          if [ "$CHANGED" -gt 0 ]; then
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+            echo "Only documentation changes, skipping build"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.needs_build == 'true'
+    runs-on: macos-latest # aarch64-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: vp-nix
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build vite-plus
+        run: nix build .#vite-plus --print-build-logs
+
+      - name: Test vp runs
+        run: nix run .#vite-plus -- --version
+
+  ci-complete:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: always()
+    steps:
+      - name: Check build result
+        run: |
+          if [[ "${{ needs.build.result }}" == "failure" ]]; then
+            echo "Build failed"
+            exit 1
+          fi
+          echo "CI complete (build: ${{ needs.build.result }})"
