@@ -13,6 +13,12 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 
 ## [Unreleased]
 
+## [0.1.12-alpha.2-nix.1] - 2026-03-16
+
+### Changed
+
+- Update vite-plus to v0.1.12-alpha.2
+
 ## [0.1.11-nix.1] - 2026-03-14
 
 ### Added
@@ -22,5 +28,6 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 - Automated version update workflow
 - Automatic tag creation on release
 
-[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.11-nix.1...HEAD
+[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.12-alpha.2-nix.1...HEAD
+[0.1.12-alpha.2-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.11-nix.1...0.1.12-alpha.2-nix.1
 [0.1.11-nix.1]: https://github.com/naitokosuke/vp-nix/releases/tag/0.1.11-nix.1
