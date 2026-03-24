@@ -30,12 +30,12 @@
           rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
           craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-          version = "0.1.14-alpha.0";
+          version = "0.1.14-alpha.1";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-FkNv7tCI2HDADTbtJOwbWC/eENfPOIaar+7eLGjVs0E=";
+            hash = "sha256-MQMkbYTUkLy1xAqlmU61p9AyXUH8+OSYpQsRdNzG3fw=";
           };
 
           # fspy build.rs downloads these binaries via curl at build time.
