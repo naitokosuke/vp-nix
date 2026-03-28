@@ -13,6 +13,12 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 
 ## [Unreleased]
 
+## [0.1.15-alpha.2-nix.2] - 2026-03-28
+
+### Fixed
+
+* Include JS artifacts (dist/bin.js) from npm tarball in Nix package
+
 ## [0.1.15-alpha.2-nix.1] - 2026-03-28
 
 ### Changed
@@ -82,7 +88,8 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 - Automated version update workflow
 - Automatic tag creation on release
 
-[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.15-alpha.2-nix.1...HEAD
+[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.15-alpha.2-nix.2...HEAD
+[0.1.15-alpha.2-nix.2]: https://github.com/naitokosuke/vp-nix/compare/0.1.15-alpha.2-nix.1...0.1.15-alpha.2-nix.2
 [0.1.15-alpha.2-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.15-alpha.1-nix.1...0.1.15-alpha.2-nix.1
 [0.1.15-alpha.1-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.15-alpha.0-nix.1...0.1.15-alpha.1-nix.1
 [0.1.15-alpha.0-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.14-alpha.1-nix.1...0.1.15-alpha.0-nix.1
