@@ -50,6 +50,12 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
+          # JS artifacts from the npm package (vp binary expects node_modules/vite-plus/dist/bin.js)
+          vitePlusNpm = pkgs.fetchurl {
+            url = "https://registry.npmjs.org/vite-plus/-/vite-plus-${version}.tgz";
+            hash = "sha256-thIKhIJ9y4iO81wMADgM++pWzxm7UbO7JTFyy5yO8pk=";
+          };
+
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
             for arg in "$@"; do url="$arg"; done
             case "$url" in
@@ -88,6 +94,11 @@
               --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
                              'members = ["crates/*"]'
             sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+          '';
+
+          postInstall = ''
+            mkdir -p $out/node_modules/vite-plus
+            tar xzf ${vitePlusNpm} --strip-components=1 -C $out/node_modules/vite-plus
           '';
 
           doCheck = false;
