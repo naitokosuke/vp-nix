@@ -11,7 +11,12 @@
   };
 
   outputs =
-    { self, nixpkgs, crane, rust-overlay }:
+    {
+      self,
+      nixpkgs,
+      crane,
+      rust-overlay,
+    }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -19,7 +24,8 @@
 
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
 
-      mkVitePlus = system:
+      mkVitePlus =
+        system:
         let
           pkgs = import nixpkgs {
             inherit system;
@@ -110,7 +116,8 @@
         };
     in
     {
-      packages = forAllSystems (system:
+      packages = forAllSystems (
+        system:
         let
           vite-plus = mkVitePlus system;
         in
@@ -120,7 +127,10 @@
         }
       );
 
-      apps = forAllSystems (system:
+      formatter = forAllSystems (system: (import nixpkgs { inherit system; }).nixfmt);
+
+      apps = forAllSystems (
+        system:
         let
           vite-plus = mkVitePlus system;
           app = {
