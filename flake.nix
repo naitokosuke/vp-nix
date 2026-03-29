@@ -30,12 +30,12 @@
           rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
           craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-          version = "0.1.15-alpha.2";
+          version = "0.1.15-alpha.5";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-HLa1FcUC4FZOOlCoIW4TRkiXk2a7NRlduuvSK/JRkUo=";
+            hash = "sha256-M785QpdqvQZFBIl/yTEe1j+LRqKg+IIqaeQXkXYNp74=";
           };
 
           # fspy build.rs downloads these binaries via curl at build time.
@@ -53,7 +53,7 @@
           # JS artifacts from the npm package (vp binary expects node_modules/vite-plus/dist/bin.js)
           vitePlusNpm = pkgs.fetchurl {
             url = "https://registry.npmjs.org/vite-plus/-/vite-plus-${version}.tgz";
-            hash = "sha256-thIKhIJ9y4iO81wMADgM++pWzxm7UbO7JTFyy5yO8pk=";
+            hash = "sha256-u1Y87llE/gqxOO5B6UgRvbjJsexcegg8SEuLQW1d2VQ=";
           };
 
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
