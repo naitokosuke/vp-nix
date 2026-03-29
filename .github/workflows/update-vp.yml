@@ -25,6 +25,10 @@ jobs:
           name: vp-nix
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
       - name: Get current version
         id: current
         run: |
@@ -162,7 +166,8 @@ jobs:
 
             ### Changes
             - Updated version in `flake.nix`
-            - Updated source hash
+            - Updated source hash and `npmDepsHash`
+            - Updated `package.json` and `package-lock.json`
             - Updated `CHANGELOG.md`
 
             ### Links

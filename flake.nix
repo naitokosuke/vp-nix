@@ -50,11 +50,18 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
-          # Fetch npm dependencies using nixpkgs standard fetchNpmDeps.
-          # The lock file (package-lock.json) pins exact versions for reproducibility.
-          npmDeps = pkgs.fetchNpmDeps {
+          # Build npm dependencies as a separate derivation using nixpkgs standard
+          # buildNpmPackage. The lock file (package-lock.json) pins exact versions.
+          vitePlusNodeModules = pkgs.buildNpmPackage {
+            pname = "vite-plus-npm-deps";
+            inherit version;
             src = self;
-            hash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg="; # npmDepsHash
+            npmDepsHash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg="; # npmDepsHash
+            dontNpmBuild = true;
+            installPhase = ''
+              mkdir -p $out
+              cp -r node_modules $out/
+            '';
           };
 
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
@@ -73,12 +80,7 @@
           inherit version src cargoVendorDir;
 
           cargoExtraArgs = "-p vite_global_cli";
-          nativeBuildInputs = [
-            fakeCurl
-            pkgs.nodejs
-            pkgs.npmHooks.npmConfigHook
-          ];
-          inherit npmDeps;
+          nativeBuildInputs = [ fakeCurl ];
 
           # The workspace references packages/cli/binding which depends on
           # rolldown/ (not present in the source tree). Remove the member and
@@ -90,14 +92,10 @@
             sed -i '/path = "\.\/rolldown\//d' Cargo.toml
             substituteInPlace crates/vite_global_cli/Cargo.toml \
               --replace-fail 'version = "0.0.0"' 'version = "${version}"'
-            cp ${self}/package.json ${self}/package-lock.json .
           '';
 
           postInstall = ''
-            cd $out
-            cp ${self}/package.json ${self}/package-lock.json .
-            npm ci --production --ignore-scripts --prefer-offline
-            rm package.json package-lock.json
+            cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
           '';
 
           doCheck = false;
