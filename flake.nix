@@ -50,16 +50,21 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
-          # Build node_modules with all npm dependencies (cross-spawn, cac, etc.)
-          vitePlusNodeModules = pkgs.buildNpmPackage {
-            pname = "vite-plus-deps";
-            inherit version;
-            src = self;
-            npmDepsHash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg=";
-            dontNpmBuild = true;
-            installPhase = ''
-              mkdir -p $out
-              cp -r node_modules $out/
+          # Fixed-output derivation: fetch vite-plus npm package with all dependencies.
+          # Network access is allowed because outputHash pins the result.
+          vitePlusNodeModules = pkgs.stdenv.mkDerivation {
+            name = "vite-plus-node-modules-${version}";
+            outputHashMode = "recursive";
+            outputHashAlgo = "sha256";
+            outputHash = "sha256-3sPAgy3Tos0ywbYD4TbNuILbtoPUwtGYvKZ4HpheyGQ=";
+            nativeBuildInputs = [ pkgs.nodejs pkgs.cacert ];
+            buildCommand = ''
+              export HOME=$TMPDIR
+              export npm_config_cache=$TMPDIR/npm-cache
+              mkdir work && cd work
+              echo '{"dependencies":{"vite-plus":"${version}"}}' > package.json
+              npm install --production --ignore-scripts
+              mv node_modules $out
             '';
           };
 
@@ -72,19 +77,7 @@
             esac
           '';
 
-          # Vendor cargo deps, patching vite-task git checkout (missing README.md)
-          cargoVendorDir = craneLib.vendorCargoDeps {
-            inherit src;
-            overrideVendorGitCheckout = ps: drv:
-              if pkgs.lib.any (p: pkgs.lib.hasInfix "vite-task" (p.source or "")) ps then
-                drv.overrideAttrs (old: {
-                  postPatch = (old.postPatch or "") + ''
-                    touch crates/vite_task/README.md
-                  '';
-                })
-              else
-                drv;
-          };
+          cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
         in
         craneLib.buildPackage {
           pname = "vite-plus";
@@ -104,7 +97,7 @@
           '';
 
           postInstall = ''
-            cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
+            cp -r --no-preserve=mode ${vitePlusNodeModules} $out/node_modules
           '';
 
           doCheck = false;

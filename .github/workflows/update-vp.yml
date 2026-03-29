@@ -94,24 +94,18 @@ jobs:
 
           echo "Updated source to version $NEW_VERSION with hash $NEW_HASH"
 
-          # Get new npm tarball hash
-          echo "Fetching npm tarball hash for version $NEW_VERSION..."
-          NPM_PREFETCH_HASH=$(nix-prefetch-url "https://registry.npmjs.org/vite-plus/-/vite-plus-${NEW_VERSION}.tgz")
-          if [ -z "$NPM_PREFETCH_HASH" ]; then
-            echo "Error: Failed to prefetch npm tarball"
+          # Update node_modules outputHash by building with a dummy hash and
+          # extracting the correct one from the error message.
+          echo "Computing node_modules hash for version $NEW_VERSION..."
+          $GSED -i 's|outputHash = "sha256-[^"]*"|outputHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|' flake.nix
+          NODE_MODULES_HASH=$(nix build .#vite-plus 2>&1 | $GSED -n 's/.*got: *\(sha256-[^ ]*\)/\1/p' | head -1)
+          if [ -z "$NODE_MODULES_HASH" ]; then
+            echo "Error: Failed to compute node_modules hash"
             exit 1
           fi
-          NPM_HASH=$(nix hash to-sri --type sha256 "$NPM_PREFETCH_HASH")
-          if [ -z "$NPM_HASH" ]; then
-            echo "Error: Failed to convert npm hash to SRI format"
-            exit 1
-          fi
-          echo "Got npm hash: $NPM_HASH"
+          $GSED -i 's|outputHash = "sha256-[^"]*"|outputHash = "'"$NODE_MODULES_HASH"'"|' flake.nix
 
-          # Update npm tarball hash (vitePlusNpm - the hash after "registry.npmjs.org")
-          $GSED -i '/registry\.npmjs\.org/{n;s|hash = "sha256-[^"]*"|hash = "'"$NPM_HASH"'"|;}' flake.nix
-
-          echo "Updated npm tarball hash to $NPM_HASH"
+          echo "Updated node_modules hash to $NODE_MODULES_HASH"
 
       - name: Update CHANGELOG.md
         if: steps.check.outputs.needs_update == 'true'
