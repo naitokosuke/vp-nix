@@ -50,22 +50,11 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
-          # Fixed-output derivation: fetch vite-plus npm package with all dependencies.
-          # Network access is allowed because outputHash pins the result.
-          vitePlusNodeModules = pkgs.stdenv.mkDerivation {
-            name = "vite-plus-node-modules-${version}";
-            outputHashMode = "recursive";
-            outputHashAlgo = "sha256";
-            outputHash = "sha256-3sPAgy3Tos0ywbYD4TbNuILbtoPUwtGYvKZ4HpheyGQ=";
-            nativeBuildInputs = [ pkgs.nodejs pkgs.cacert ];
-            buildCommand = ''
-              export HOME=$TMPDIR
-              export npm_config_cache=$TMPDIR/npm-cache
-              mkdir work && cd work
-              echo '{"dependencies":{"vite-plus":"${version}"}}' > package.json
-              npm install --production --ignore-scripts
-              mv node_modules $out
-            '';
+          # Fetch npm dependencies using nixpkgs standard fetchNpmDeps.
+          # The lock file (package-lock.json) pins exact versions for reproducibility.
+          npmDeps = pkgs.fetchNpmDeps {
+            src = self;
+            hash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg="; # npmDepsHash
           };
 
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
@@ -84,7 +73,12 @@
           inherit version src cargoVendorDir;
 
           cargoExtraArgs = "-p vite_global_cli";
-          nativeBuildInputs = [ fakeCurl ];
+          nativeBuildInputs = [
+            fakeCurl
+            pkgs.nodejs
+            pkgs.npmHooks.npmConfigHook
+          ];
+          inherit npmDeps;
 
           # The workspace references packages/cli/binding which depends on
           # rolldown/ (not present in the source tree). Remove the member and
@@ -94,10 +88,14 @@
               --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
                              'members = ["crates/*"]'
             sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+            cp ${self}/package.json ${self}/package-lock.json .
           '';
 
           postInstall = ''
-            cp -r --no-preserve=mode ${vitePlusNodeModules} $out/node_modules
+            cd $out
+            cp ${self}/package.json ${self}/package-lock.json .
+            npm ci --production --ignore-scripts --prefer-offline
+            rm package.json package-lock.json
           '';
 
           doCheck = false;
