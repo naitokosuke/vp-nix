@@ -50,10 +50,17 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
-          # JS artifacts from the npm package (vp binary expects node_modules/vite-plus/dist/bin.js)
-          vitePlusNpm = pkgs.fetchurl {
-            url = "https://registry.npmjs.org/vite-plus/-/vite-plus-${version}.tgz";
-            hash = "sha256-u1Y87llE/gqxOO5B6UgRvbjJsexcegg8SEuLQW1d2VQ=";
+          # Build node_modules with all npm dependencies (cross-spawn, cac, etc.)
+          vitePlusNodeModules = pkgs.buildNpmPackage {
+            pname = "vite-plus-deps";
+            inherit version;
+            src = self;
+            npmDepsHash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg=";
+            dontNpmBuild = true;
+            installPhase = ''
+              mkdir -p $out
+              cp -r node_modules $out/
+            '';
           };
 
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
@@ -97,8 +104,7 @@
           '';
 
           postInstall = ''
-            mkdir -p $out/node_modules/vite-plus
-            tar xzf ${vitePlusNpm} --strip-components=1 -C $out/node_modules/vite-plus
+            cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
           '';
 
           doCheck = false;
