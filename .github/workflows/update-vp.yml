@@ -25,6 +25,10 @@ jobs:
           name: vp-nix
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
       - name: Get current version
         id: current
         run: |
@@ -94,24 +98,21 @@ jobs:
 
           echo "Updated source to version $NEW_VERSION with hash $NEW_HASH"
 
-          # Get new npm tarball hash
-          echo "Fetching npm tarball hash for version $NEW_VERSION..."
-          NPM_PREFETCH_HASH=$(nix-prefetch-url "https://registry.npmjs.org/vite-plus/-/vite-plus-${NEW_VERSION}.tgz")
-          if [ -z "$NPM_PREFETCH_HASH" ]; then
-            echo "Error: Failed to prefetch npm tarball"
+          # Update package.json and package-lock.json for the new version
+          echo "Updating npm dependencies for version $NEW_VERSION..."
+          $GSED -i "s|\"vite-plus\": \"[^\"]*\"|\"vite-plus\": \"$NEW_VERSION\"|" package.json
+          npm install --package-lock-only
+          echo "Updated package-lock.json"
+
+          # Compute new npmDepsHash using prefetch-npm-deps
+          NPM_DEPS_HASH=$(nix run nixpkgs#prefetch-npm-deps -- package-lock.json 2>/dev/null)
+          if [ -z "$NPM_DEPS_HASH" ]; then
+            echo "Error: Failed to compute npmDepsHash"
             exit 1
           fi
-          NPM_HASH=$(nix hash to-sri --type sha256 "$NPM_PREFETCH_HASH")
-          if [ -z "$NPM_HASH" ]; then
-            echo "Error: Failed to convert npm hash to SRI format"
-            exit 1
-          fi
-          echo "Got npm hash: $NPM_HASH"
+          $GSED -i "s|hash = \"sha256-[^\"]*\"; # npmDepsHash|hash = \"$NPM_DEPS_HASH\"; # npmDepsHash|" flake.nix
 
-          # Update npm tarball hash (vitePlusNpm - the hash after "registry.npmjs.org")
-          $GSED -i '/registry\.npmjs\.org/{n;s|hash = "sha256-[^"]*"|hash = "'"$NPM_HASH"'"|;}' flake.nix
-
-          echo "Updated npm tarball hash to $NPM_HASH"
+          echo "Updated npmDepsHash to $NPM_DEPS_HASH"
 
       - name: Update CHANGELOG.md
         if: steps.check.outputs.needs_update == 'true'
@@ -165,7 +166,8 @@ jobs:
 
             ### Changes
             - Updated version in `flake.nix`
-            - Updated source hash
+            - Updated source hash and `npmDepsHash`
+            - Updated `package.json` and `package-lock.json`
             - Updated `CHANGELOG.md`
 
             ### Links

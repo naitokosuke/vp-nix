@@ -50,10 +50,18 @@
             hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
           };
 
-          # JS artifacts from the npm package (vp binary expects node_modules/vite-plus/dist/bin.js)
-          vitePlusNpm = pkgs.fetchurl {
-            url = "https://registry.npmjs.org/vite-plus/-/vite-plus-${version}.tgz";
-            hash = "sha256-u1Y87llE/gqxOO5B6UgRvbjJsexcegg8SEuLQW1d2VQ=";
+          # Build npm dependencies as a separate derivation using nixpkgs standard
+          # buildNpmPackage. The lock file (package-lock.json) pins exact versions.
+          vitePlusNodeModules = pkgs.buildNpmPackage {
+            pname = "vite-plus-npm-deps";
+            inherit version;
+            src = self;
+            npmDepsHash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg="; # npmDepsHash
+            dontNpmBuild = true;
+            installPhase = ''
+              mkdir -p $out
+              cp -r node_modules $out/
+            '';
           };
 
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
@@ -65,19 +73,7 @@
             esac
           '';
 
-          # Vendor cargo deps, patching vite-task git checkout (missing README.md)
-          cargoVendorDir = craneLib.vendorCargoDeps {
-            inherit src;
-            overrideVendorGitCheckout = ps: drv:
-              if pkgs.lib.any (p: pkgs.lib.hasInfix "vite-task" (p.source or "")) ps then
-                drv.overrideAttrs (old: {
-                  postPatch = (old.postPatch or "") + ''
-                    touch crates/vite_task/README.md
-                  '';
-                })
-              else
-                drv;
-          };
+          cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
         in
         craneLib.buildPackage {
           pname = "vite-plus";
@@ -94,11 +90,12 @@
               --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
                              'members = ["crates/*"]'
             sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+            substituteInPlace crates/vite_global_cli/Cargo.toml \
+              --replace-fail 'version = "0.0.0"' 'version = "${version}"'
           '';
 
           postInstall = ''
-            mkdir -p $out/node_modules/vite-plus
-            tar xzf ${vitePlusNpm} --strip-components=1 -C $out/node_modules/vite-plus
+            cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
           '';
 
           doCheck = false;
