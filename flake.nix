@@ -218,7 +218,7 @@
             description = "Unified toolchain for JavaScript";
             homepage = "https://github.com/voidzero-dev/vite-plus";
             license = pkgs.lib.licenses.mit;
-            maintainers = [ ];
+            maintainers = [ { github = "naitokosuke"; } ];
             mainProgram = "vp";
           };
         };
