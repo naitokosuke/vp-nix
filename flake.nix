@@ -32,6 +32,7 @@
 
           # Project requires nightly Rust (rust-toolchain.toml: nightly-2025-12-11)
           rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
+
           rustPlatform = pkgs.makeRustPlatform {
             cargo = rustToolchain;
             rustc = rustToolchain;
@@ -80,12 +81,48 @@
             esac
           '';
 
+          # Use cargo vendor directly via a fixed-output derivation.
+          # nixpkgs' fetchCargoVendor and importCargoLock both fail when
+          # the same crate name+version appears from crates.io AND a git
+          # source (brush-parser-0.3.0). cargo vendor handles this natively
+          # by appending a hash suffix to disambiguate.
+          cargoVendorDir = pkgs.stdenv.mkDerivation {
+            name = "vite-plus-${version}-cargo-vendor";
+            inherit src;
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.git
+              pkgs.cacert
+            ];
+            postUnpack = ''
+              cp $sourceRoot/Cargo.lock $TMPDIR/original-Cargo.lock
+            '';
+            postPatch = ''
+              substituteInPlace Cargo.toml \
+                --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
+                               'members = ["crates/*"]'
+              sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+            '';
+            buildPhase = ''
+              export HOME=$TMPDIR
+              export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+              vendorConfig=$(cargo -Z bindeps vendor $out)
+              mkdir -p $out/.cargo
+              echo "$vendorConfig" | sed "s|$out|@vendor@|g" > $out/.cargo/config.toml
+              cp $TMPDIR/original-Cargo.lock $out/Cargo.lock
+            '';
+            dontInstall = true;
+            dontFixup = true;
+            outputHashMode = "recursive";
+            outputHashAlgo = "sha256";
+            outputHash = "sha256-zFOVO1CYdE18PRxpWDP8eAvG/AuC4IEGZwT52ji/hTE="; # cargoVendorHash
+          };
+
         in
         rustPlatform.buildRustPackage {
           pname = "vite-plus";
           inherit version src;
-
-          cargoHash = "sha256-dWvGgWAehxbNfZ3rizsk19NTJDeJ+JOxBVPD4qwTuKc=";
+          cargoDeps = cargoVendorDir;
 
           cargoBuildFlags = [
             "-p"
