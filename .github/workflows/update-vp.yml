@@ -29,6 +29,10 @@ jobs:
         with:
           node-version: 'lts/*'
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Get current version
         id: current
         run: |
@@ -98,21 +102,22 @@ jobs:
 
           echo "Updated source to version $NEW_VERSION with hash $NEW_HASH"
 
-          # Update package.json and package-lock.json for the new version
-          echo "Updating npm dependencies for version $NEW_VERSION..."
-          $GSED -i "s|\"vite-plus\": \"[^\"]*\"|\"vite-plus\": \"$NEW_VERSION\"|" package.json
-          npm install --package-lock-only
-          echo "Updated package-lock.json"
+          # Update pnpm/package.json and pnpm-lock.yaml for the new version
+          echo "Updating pnpm dependencies for version $NEW_VERSION..."
+          $GSED -i "s|\"vite-plus\": \"[^\"]*\"|\"vite-plus\": \"$NEW_VERSION\"|" pnpm/package.json
+          (cd pnpm && pnpm install --lockfile-only)
+          echo "Updated pnpm-lock.yaml"
 
-          # Compute new npmDepsHash using prefetch-npm-deps
-          NPM_DEPS_HASH=$(nix run nixpkgs#prefetch-npm-deps -- package-lock.json 2>/dev/null)
-          if [ -z "$NPM_DEPS_HASH" ]; then
-            echo "Error: Failed to compute npmDepsHash"
+          # Compute new pnpmDepsHash by building with a fake hash and extracting the correct one
+          $GSED -i "s|hash = \"sha256-[^\"]*\"; # pnpmDepsHash|hash = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"; # pnpmDepsHash|" flake.nix
+          PNPM_DEPS_HASH=$(nix build .#vite-plus 2>&1 | grep 'got:' | head -1 | awk '{print $2}')
+          if [ -z "$PNPM_DEPS_HASH" ]; then
+            echo "Error: Failed to compute pnpmDepsHash"
             exit 1
           fi
-          $GSED -i "s|hash = \"sha256-[^\"]*\"; # npmDepsHash|hash = \"$NPM_DEPS_HASH\"; # npmDepsHash|" flake.nix
+          $GSED -i "s|hash = \"sha256-[^\"]*\"; # pnpmDepsHash|hash = \"$PNPM_DEPS_HASH\"; # pnpmDepsHash|" flake.nix
 
-          echo "Updated npmDepsHash to $NPM_DEPS_HASH"
+          echo "Updated pnpmDepsHash to $PNPM_DEPS_HASH"
 
       - name: Update CHANGELOG.md
         if: steps.check.outputs.needs_update == 'true'
@@ -166,8 +171,8 @@ jobs:
 
             ### Changes
             - Updated version in `flake.nix`
-            - Updated source hash and `npmDepsHash`
-            - Updated `package.json` and `package-lock.json`
+            - Updated source hash and `pnpmDepsHash`
+            - Updated `pnpm/package.json` and `pnpm-lock.yaml`
             - Updated `CHANGELOG.md`
 
             ### Links

@@ -99,14 +99,28 @@
 
           uutils-coreutils = pkgs.fetchurl { inherit (binaries.coreutils) url hash; };
 
-          # Build npm dependencies as a separate derivation using nixpkgs standard
-          # buildNpmPackage. The lock file (package-lock.json) pins exact versions.
-          vitePlusNodeModules = pkgs.buildNpmPackage {
-            pname = "vite-plus-npm-deps";
+          # Build pnpm dependencies as a separate derivation.
+          # The lock file (pnpm/pnpm-lock.yaml) pins exact versions.
+          vitePlusNodeModules = pkgs.stdenv.mkDerivation {
+            pname = "vite-plus-pnpm-deps";
             inherit version;
-            src = self;
-            npmDepsHash = "sha256-zJ8ItVMYQIOe6fX6oJN9GUbSXz/WXKirk987ubSUDWg="; # npmDepsHash
-            dontNpmBuild = true;
+            src = ./pnpm;
+
+            nativeBuildInputs = [
+              pkgs.pnpm_10
+              pkgs.pnpmConfigHook
+            ];
+
+            pnpmDeps = pkgs.fetchPnpmDeps {
+              pname = "vite-plus-pnpm-deps";
+              inherit version;
+              src = ./pnpm;
+              hash = "sha256-ewNmxFvrt3DdUfNa7IHkYRhFWwy3esk/FCeGku59eOw="; # pnpmDepsHash
+              fetcherVersion = 3;
+            };
+
+            dontBuild = true;
+
             installPhase = ''
               mkdir -p $out
               cp -r node_modules $out/
