@@ -115,27 +115,14 @@
           };
         };
     in
-    {
-      packages = forAllSystems (
+    let
+      systemOutputs = forAllSystems (
         system:
         let
-          vite-plus = mkVitePlus system;
-        in
-        {
-          inherit vite-plus;
-          default = vite-plus;
-        }
-      );
-
-      formatter = forAllSystems (system: (import nixpkgs { inherit system; }).nixfmt);
-
-      apps = forAllSystems (
-        system:
-        let
-          vite-plus = mkVitePlus system;
+          vp = mkVitePlus system;
           app = {
             type = "app";
-            program = "${vite-plus}/bin/vp";
+            program = "${vp}/bin/vp";
             meta = {
               description = "Unified toolchain for JavaScript";
               mainProgram = "vp";
@@ -143,9 +130,20 @@
           };
         in
         {
-          vite-plus = app;
-          default = app;
+          packages = {
+            vite-plus = vp;
+            default = vp;
+          };
+          apps = {
+            vite-plus = app;
+            default = app;
+          };
         }
       );
+    in
+    {
+      packages = nixpkgs.lib.mapAttrs (_: v: v.packages) systemOutputs;
+      apps = nixpkgs.lib.mapAttrs (_: v: v.apps) systemOutputs;
+      formatter = forAllSystems (system: (import nixpkgs { inherit system; }).nixfmt);
     };
 }
