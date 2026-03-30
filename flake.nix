@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,7 +13,6 @@
     {
       self,
       nixpkgs,
-      crane,
       rust-overlay,
     }:
     let
@@ -34,7 +32,10 @@
 
           # Project requires nightly Rust (rust-toolchain.toml: nightly-2025-12-11)
           rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
-          craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustToolchain;
+            rustc = rustToolchain;
+          };
 
           version = "0.1.15-alpha.5";
           src = pkgs.fetchFromGitHub {
@@ -79,13 +80,18 @@
             esac
           '';
 
-          cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
         in
-        craneLib.buildPackage {
+        rustPlatform.buildRustPackage {
           pname = "vite-plus";
-          inherit version src cargoVendorDir;
+          inherit version src;
 
-          cargoExtraArgs = "-p vite_global_cli";
+          useFetchCargoVendor = true;
+          cargoHash = pkgs.lib.fakeHash;
+
+          cargoBuildFlags = [
+            "-p"
+            "vite_global_cli"
+          ];
           nativeBuildInputs = [ fakeCurl ];
 
           # The workspace references packages/cli/binding which depends on
