@@ -85,8 +85,7 @@
           pname = "vite-plus";
           inherit version src;
 
-          useFetchCargoVendor = true;
-          cargoHash = pkgs.lib.fakeHash;
+          cargoHash = "sha256-dWvGgWAehxbNfZ3rizsk19NTJDeJ+JOxBVPD4qwTuKc=";
 
           cargoBuildFlags = [
             "-p"
