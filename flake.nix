@@ -69,25 +69,25 @@
             "x86_64-darwin" = {
               oils = {
                 url = "https://github.com/branchseer/oils-for-unix-build/releases/download/oils-for-unix-0.37.0/oils-for-unix-0.37.0-darwin-x86_64.tar.gz";
-                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # TODO: replace with correct hash
+                hash = "sha256-qhIljRvVUwIBRK1h/awY59++P8OWXaMu5FiEAVMWkVE=";
               };
               coreutils = {
                 url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-x86_64-apple-darwin.tar.gz";
-                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # TODO: replace with correct hash
+                hash = "sha256-bkvoQp7+hsmmAkeuepMCIe0RdwqXX7S2/Qn/jTm5oVw=";
               };
             };
             "aarch64-linux" = {
               oils = null; # oils-for-unix does not publish Linux binaries; use system oils
               coreutils = {
                 url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-aarch64-unknown-linux-gnu.tar.gz";
-                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # TODO: replace with correct hash
+                hash = "sha256-AhoMGXe6FXnV6BMgAiFVibBrSkD7DhtiyZI6c7xy3uU=";
               };
             };
             "x86_64-linux" = {
               oils = null; # oils-for-unix does not publish Linux binaries; use system oils
               coreutils = {
                 url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-x86_64-unknown-linux-gnu.tar.gz";
-                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # TODO: replace with correct hash
+                hash = "sha256-cmgJHJaMeSidiwge2ljnONEvmDrrY8vzBgmvYp+CJVQ=";
               };
             };
           };
@@ -95,10 +95,7 @@
           binaries = platformBinaries.${system};
 
           oils-for-unix =
-            if binaries.oils != null then
-              pkgs.fetchurl { inherit (binaries.oils) url hash; }
-            else
-              null;
+            if binaries.oils != null then pkgs.fetchurl { inherit (binaries.oils) url hash; } else null;
 
           uutils-coreutils = pkgs.fetchurl { inherit (binaries.coreutils) url hash; };
 
