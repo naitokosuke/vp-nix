@@ -108,16 +108,49 @@ jobs:
           (cd pnpm && pnpm install --lockfile-only)
           echo "Updated pnpm-lock.yaml"
 
-          # Compute new pnpmDepsHash by building with a fake hash and extracting the correct one
-          $GSED -i "s|hash = \"sha256-[^\"]*\"; # pnpmDepsHash|hash = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"; # pnpmDepsHash|" flake.nix
-          PNPM_DEPS_HASH=$(nix build .#vite-plus 2>&1 | grep 'got:' | head -1 | awk '{print $2}')
+          # Helper: extract the correct hash from a nix build hash-mismatch error.
+          # Nix reports:
+          #   error: hash mismatch in fixed-output derivation '/nix/store/...-<name>-...':
+          #            specified: sha256-...
+          #               got:    sha256-...
+          # Args: $1 = pattern to identify the FOD (e.g. "pnpm-deps" or "cargo-vendor")
+          extract_hash() {
+            local pattern="$1"
+            local output
+            output=$(NO_COLOR=1 nix build .#vite-plus --no-link 2>&1) || true
+            echo "$output" >&2
+            echo "$output" \
+              | grep -A2 "$pattern" \
+              | grep 'got:' \
+              | grep -oE 'sha256-[A-Za-z0-9+/]{43}=' \
+              | head -1
+          }
+
+          FAKE_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+          # Step 1: Compute pnpmDepsHash
+          # Invalidate only pnpmDepsHash; cargoVendorHash stays correct so
+          # nix reports exactly one hash mismatch for the pnpm FOD.
+          $GSED -i "s|hash = \"sha256-[^\"]*\"; # pnpmDepsHash|hash = \"$FAKE_HASH\"; # pnpmDepsHash|" flake.nix
+          PNPM_DEPS_HASH=$(extract_hash "pnpm-deps")
           if [ -z "$PNPM_DEPS_HASH" ]; then
             echo "Error: Failed to compute pnpmDepsHash"
             exit 1
           fi
           $GSED -i "s|hash = \"sha256-[^\"]*\"; # pnpmDepsHash|hash = \"$PNPM_DEPS_HASH\"; # pnpmDepsHash|" flake.nix
-
           echo "Updated pnpmDepsHash to $PNPM_DEPS_HASH"
+
+          # Step 2: Compute cargoVendorHash
+          # pnpmDepsHash is now correct. Invalidate only cargoVendorHash so
+          # nix reports exactly one hash mismatch for the cargo vendor FOD.
+          $GSED -i "s|outputHash = \"sha256-[^\"]*\"; # cargoVendorHash|outputHash = \"$FAKE_HASH\"; # cargoVendorHash|" flake.nix
+          CARGO_VENDOR_HASH=$(extract_hash "cargo-vendor")
+          if [ -z "$CARGO_VENDOR_HASH" ]; then
+            echo "Error: Failed to compute cargoVendorHash"
+            exit 1
+          fi
+          $GSED -i "s|outputHash = \"sha256-[^\"]*\"; # cargoVendorHash|outputHash = \"$CARGO_VENDOR_HASH\"; # cargoVendorHash|" flake.nix
+          echo "Updated cargoVendorHash to $CARGO_VENDOR_HASH"
 
       - name: Update CHANGELOG.md
         if: steps.check.outputs.needs_update == 'true'
@@ -171,7 +204,7 @@ jobs:
 
             ### Changes
             - Updated version in `flake.nix`
-            - Updated source hash and `pnpmDepsHash`
+            - Updated source hash, `pnpmDepsHash`, and `cargoVendorHash`
             - Updated `pnpm/package.json` and `pnpm-lock.yaml`
             - Updated `CHANGELOG.md`
 
