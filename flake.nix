@@ -18,6 +18,9 @@
     let
       supportedSystems = [
         "aarch64-darwin"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "x86_64-linux"
       ];
 
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
@@ -48,15 +51,53 @@
 
           # fspy build.rs downloads these binaries via curl at build time.
           # Pre-fetch them and provide a curl wrapper to satisfy the sandbox.
-          oils-for-unix = pkgs.fetchurl {
-            url = "https://github.com/branchseer/oils-for-unix-build/releases/download/oils-for-unix-0.37.0/oils-for-unix-0.37.0-darwin-arm64.tar.gz";
-            hash = "sha256-OjX3rivoX80yOSzYFxUi9YIvIKaRJcXp2NaLL1yFcJg=";
+          #
+          # Platform mapping for oils-for-unix and uutils-coreutils.
+          # oils-for-unix only provides macOS binaries; on Linux the build uses
+          # the system-provided oils package instead.
+          platformBinaries = {
+            "aarch64-darwin" = {
+              oils = {
+                url = "https://github.com/branchseer/oils-for-unix-build/releases/download/oils-for-unix-0.37.0/oils-for-unix-0.37.0-darwin-arm64.tar.gz";
+                hash = "sha256-OjX3rivoX80yOSzYFxUi9YIvIKaRJcXp2NaLL1yFcJg=";
+              };
+              coreutils = {
+                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-aarch64-apple-darwin.tar.gz";
+                hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
+              };
+            };
+            "x86_64-darwin" = {
+              oils = {
+                url = "https://github.com/branchseer/oils-for-unix-build/releases/download/oils-for-unix-0.37.0/oils-for-unix-0.37.0-darwin-x86_64.tar.gz";
+                hash = "sha256-qhIljRvVUwIBRK1h/awY59++P8OWXaMu5FiEAVMWkVE=";
+              };
+              coreutils = {
+                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-x86_64-apple-darwin.tar.gz";
+                hash = "sha256-bkvoQp7+hsmmAkeuepMCIe0RdwqXX7S2/Qn/jTm5oVw=";
+              };
+            };
+            "aarch64-linux" = {
+              oils = null; # oils-for-unix does not publish Linux binaries; use system oils
+              coreutils = {
+                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-aarch64-unknown-linux-gnu.tar.gz";
+                hash = "sha256-AhoMGXe6FXnV6BMgAiFVibBrSkD7DhtiyZI6c7xy3uU=";
+              };
+            };
+            "x86_64-linux" = {
+              oils = null; # oils-for-unix does not publish Linux binaries; use system oils
+              coreutils = {
+                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-x86_64-unknown-linux-gnu.tar.gz";
+                hash = "sha256-cmgJHJaMeSidiwge2ljnONEvmDrrY8vzBgmvYp+CJVQ=";
+              };
+            };
           };
 
-          uutils-coreutils = pkgs.fetchurl {
-            url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-aarch64-apple-darwin.tar.gz";
-            hash = "sha256-oUi2YO6vQJr3pEBpA/k9DmcTpeua3K9xodcy8ePMNSI=";
-          };
+          binaries = platformBinaries.${system};
+
+          oils-for-unix =
+            if binaries.oils != null then pkgs.fetchurl { inherit (binaries.oils) url hash; } else null;
+
+          uutils-coreutils = pkgs.fetchurl { inherit (binaries.coreutils) url hash; };
 
           # Build npm dependencies as a separate derivation using nixpkgs standard
           # buildNpmPackage. The lock file (package-lock.json) pins exact versions.
@@ -72,14 +113,25 @@
             '';
           };
 
-          fakeCurl = pkgs.writeShellScriptBin "curl" ''
-            for arg in "$@"; do url="$arg"; done
-            case "$url" in
-              *oils-for-unix*darwin-arm64*) cat "${oils-for-unix}" ;;
-              *coreutils*aarch64-apple-darwin*) cat "${uutils-coreutils}" ;;
-              *) echo "fakeCurl: unknown URL: $url" >&2; exit 1 ;;
-            esac
-          '';
+          fakeCurl = pkgs.writeShellScriptBin "curl" (
+            ''
+              for arg in "$@"; do url="$arg"; done
+              case "$url" in
+            ''
+            + (
+              if oils-for-unix != null then
+                ''
+                  *oils-for-unix*) cat "${oils-for-unix}" ;;
+                ''
+              else
+                ""
+            )
+            + ''
+              *coreutils*) cat "${uutils-coreutils}" ;;
+                *) echo "fakeCurl: unknown URL: $url" >&2; exit 1 ;;
+              esac
+            ''
+          );
 
           # Use cargo vendor directly via a fixed-output derivation.
           # nixpkgs' fetchCargoVendor and importCargoLock both fail when

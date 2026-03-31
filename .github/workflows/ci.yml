@@ -33,7 +33,18 @@ jobs:
   build:
     needs: changes
     if: needs.changes.outputs.needs_build == 'true'
-    runs-on: macos-latest # aarch64-darwin
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest   # aarch64-darwin
+            system: aarch64-darwin
+          # Additional platforms can be enabled once binary hashes are filled in:
+          # - os: macos-13       # x86_64-darwin
+          #   system: x86_64-darwin
+          # - os: ubuntu-latest  # x86_64-linux
+          #   system: x86_64-linux
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
