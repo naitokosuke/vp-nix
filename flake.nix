@@ -239,5 +239,38 @@
       packages = nixpkgs.lib.mapAttrs (_: v: v.packages) systemOutputs;
       apps = nixpkgs.lib.mapAttrs (_: v: v.apps) systemOutputs;
       formatter = forAllSystems (system: (import nixpkgs { inherit system; }).nixfmt);
+
+      overlays.default = final: prev: {
+        vite-plus = self.packages.${final.system}.vite-plus;
+      };
+
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.mkShell {
+            packages = [
+              pkgs.nodejs
+              pkgs.nix-prefetch
+              pkgs.prefetch-npm-deps
+            ];
+          };
+        }
+      );
+
+      checks = forAllSystems (
+        system:
+        let
+          vite-plus = mkVitePlus system;
+        in
+        {
+          vite-plus-version = nixpkgs.legacyPackages.${system}.runCommand "vite-plus-version-check" {} ''
+            ${vite-plus}/bin/vp --version
+            touch $out
+          '';
+        }
+      );
     };
 }
