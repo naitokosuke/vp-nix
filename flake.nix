@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,7 +13,6 @@
     {
       self,
       nixpkgs,
-      crane,
       rust-overlay,
     }:
     let
@@ -34,7 +32,11 @@
 
           # Project requires nightly Rust (rust-toolchain.toml: nightly-2025-12-11)
           rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
-          craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustToolchain;
+            rustc = rustToolchain;
+          };
 
           version = "0.1.15-alpha.5";
           src = pkgs.fetchFromGitHub {
@@ -79,13 +81,53 @@
             esac
           '';
 
-          cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
-        in
-        craneLib.buildPackage {
-          pname = "vite-plus";
-          inherit version src cargoVendorDir;
+          # Use cargo vendor directly via a fixed-output derivation.
+          # nixpkgs' fetchCargoVendor and importCargoLock both fail when
+          # the same crate name+version appears from crates.io AND a git
+          # source (brush-parser-0.3.0). cargo vendor handles this natively
+          # by appending a hash suffix to disambiguate.
+          cargoVendorDir = pkgs.stdenv.mkDerivation {
+            name = "vite-plus-${version}-cargo-vendor";
+            inherit src;
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.git
+              pkgs.cacert
+            ];
+            postUnpack = ''
+              cp $sourceRoot/Cargo.lock $TMPDIR/original-Cargo.lock
+            '';
+            postPatch = ''
+              substituteInPlace Cargo.toml \
+                --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
+                               'members = ["crates/*"]'
+              sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+            '';
+            buildPhase = ''
+              export HOME=$TMPDIR
+              export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+              vendorConfig=$(cargo -Z bindeps vendor $out)
+              mkdir -p $out/.cargo
+              echo "$vendorConfig" | sed "s|$out|@vendor@|g" > $out/.cargo/config.toml
+              cp $TMPDIR/original-Cargo.lock $out/Cargo.lock
+            '';
+            dontInstall = true;
+            dontFixup = true;
+            outputHashMode = "recursive";
+            outputHashAlgo = "sha256";
+            outputHash = "sha256-zFOVO1CYdE18PRxpWDP8eAvG/AuC4IEGZwT52ji/hTE="; # cargoVendorHash
+          };
 
-          cargoExtraArgs = "-p vite_global_cli";
+        in
+        rustPlatform.buildRustPackage {
+          pname = "vite-plus";
+          inherit version src;
+          cargoDeps = cargoVendorDir;
+
+          cargoBuildFlags = [
+            "-p"
+            "vite_global_cli"
+          ];
           nativeBuildInputs = [ fakeCurl ];
 
           # The workspace references packages/cli/binding which depends on
