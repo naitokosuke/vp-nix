@@ -41,12 +41,12 @@
             rustc = rustToolchain;
           };
 
-          version = "0.1.17-alpha.1";
+          version = "0.1.17-alpha.3";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-4MTVmG7o1jMhHBmY10P0Z8s/Z5bxnul1ctrnX+LV92k=";
+            hash = "sha256-1Zjfp8YFu2AJwhU7QUjOQ1y06LOw24lXzXOI84wYwyY=";
           };
 
           # fspy build.rs downloads these binaries via curl at build time.
@@ -115,7 +115,7 @@
               pname = "vite-plus-pnpm-deps";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-pdauSQfrGazt1pxI19sqG0ikgvJA9Zvq+M0RGnUmOak="; # pnpmDepsHash
+              hash = "sha256-AGU02bswLIQvf5ma98ljgdvDsKsM1Dt27v81HuAZCgk="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
