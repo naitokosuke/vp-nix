@@ -210,6 +210,15 @@
 
           postInstall = ''
             cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
+
+            # Files in the Nix store are pinned to 0444 by fixupPhase.
+            # `vp create` copies templates with fs.copyFileSync, which
+            # preserves the source mode, so the destination ends up 0444
+            # and the subsequent editJsonFile call fails with EACCES.
+            # Patch the copy helper to chmod each file to 0644 right after.
+            substituteInPlace $out/node_modules/vite-plus/dist/create/bin.js \
+              --replace-fail 'else fs.copyFileSync(src, dest);' \
+                             'else { fs.copyFileSync(src, dest); fs.chmodSync(dest, 0o644); }'
           '';
 
           doCheck = false;
