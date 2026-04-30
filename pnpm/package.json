@@ -3,6 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "vite-plus": "0.1.20-alpha.4"
+    "vite-plus": "0.1.21-alpha.0"
   }
 }
