@@ -41,12 +41,12 @@
             rustc = rustToolchain;
           };
 
-          version = "0.1.21-alpha.1";
+          version = "0.1.21-alpha.2";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-HWmtgNSBo8Tvqvyq2WI5/GwEsygn3P/Rnf5j3CiPqn4=";
+            hash = "sha256-HB3wvtOfitgEyAj0isPgSJC1Tjy5M7DZ3YK6vMkte0A=";
           };
 
           # fspy build.rs downloads these binaries via curl at build time.
@@ -115,7 +115,7 @@
               pname = "vite-plus-pnpm-deps";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-Kf8x0y8n1xjvIUwrHdTBx2dqKio/g8KcEMcGJBxhKpg="; # pnpmDepsHash
+              hash = "sha256-6lDeXq2iXTjO7wcghvTJQNgIPKLwD33ERPRRZowDxRI="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
@@ -181,7 +181,7 @@
             dontFixup = true;
             outputHashMode = "recursive";
             outputHashAlgo = "sha256";
-            outputHash = "sha256-qdozwxa1MDXuj1/tZeR9gYzHE/kvJCsbNmPxo0Nht3M="; # cargoVendorHash
+            outputHash = "sha256-yq+Vvi72zTeN1PkhsBl9MiM0MXPvl950Yj9wx0919Cc="; # cargoVendorHash
           };
 
         in
