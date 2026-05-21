@@ -204,8 +204,6 @@
               --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
                              'members = ["crates/*"]'
             sed -i '/path = "\.\/rolldown\//d' Cargo.toml
-            substituteInPlace crates/vite_global_cli/Cargo.toml \
-              --replace-fail 'version = "0.0.0"' 'version = "${version}"'
           '';
 
           postInstall = ''
