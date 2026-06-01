@@ -33,20 +33,20 @@
             overlays = [ rust-overlay.overlays.default ];
           };
 
-          # Project requires nightly Rust (rust-toolchain.toml: nightly-2025-12-11)
-          rustToolchain = pkgs.rust-bin.nightly."2025-12-11".minimal;
+          # Project requires nightly Rust (rust-toolchain.toml: nightly-2026-05-24)
+          rustToolchain = pkgs.rust-bin.nightly."2026-05-24".minimal;
 
           rustPlatform = pkgs.makeRustPlatform {
             cargo = rustToolchain;
             rustc = rustToolchain;
           };
 
-          version = "0.1.22";
+          version = "0.1.23";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-HmCKCxmZMvNNK+SLkwpQSR2rrEbXoonEgKHdUn2jtE8=";
+            hash = "sha256-BlJHO1r/LHhKfe26XklJo9/E+RUf/I9JFSOXIxbYVP0=";
           };
 
           # fspy build.rs downloads these binaries via curl at build time.
@@ -115,7 +115,7 @@
               pname = "vite-plus-pnpm-deps";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-wgI60ZyXhyUnuhxGvn63WGYjIggsIbjkJ6UTCk3Ftfg="; # pnpmDepsHash
+              hash = "sha256-qeAvLPBq1JcqXoZ1rs0FwdPb/16OKDZII+qONORTDDU="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
@@ -181,7 +181,7 @@
             dontFixup = true;
             outputHashMode = "recursive";
             outputHashAlgo = "sha256";
-            outputHash = "sha256-k7QLZNR3othx98WvpW1pgAHcGgnlzQf0Vhc2bKHqH2M="; # cargoVendorHash
+            outputHash = "sha256-pZH0iv/w8asPxvygKP7z8jV8a8qn7FqRTYjLKPTvfbI="; # cargoVendorHash
           };
 
         in
