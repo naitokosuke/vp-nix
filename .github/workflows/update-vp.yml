@@ -73,12 +73,42 @@ jobs:
 
       - name: Update flake.nix
         if: steps.check.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           NEW_VERSION="${{ steps.latest.outputs.version }}"
 
           # Use GNU sed via Nix for compatibility with macOS
           GSED="nix run nixpkgs#gnused --"
+
+          # Sync the pinned Rust toolchain with upstream rust-toolchain.toml.
+          # vite-plus bumps its required nightly from time to time (e.g. v0.1.23
+          # moved to nightly-2026-05-24 for the c_variadic VaList::next_arg API).
+          # Without this, the new version fails to compile against a stale
+          # toolchain and the "Verify build" step below fails.
+          echo "Syncing Rust toolchain from upstream rust-toolchain.toml..."
+          RUST_CHANNEL=$(gh api "repos/voidzero-dev/vite-plus/contents/rust-toolchain.toml?ref=v${NEW_VERSION}" \
+            -H "Accept: application/vnd.github.raw" \
+            | grep -E '^channel' \
+            | sed -E 's/.*"nightly-([0-9]{4}-[0-9]{2}-[0-9]{2})".*/\1/')
+          if [ -z "$RUST_CHANNEL" ]; then
+            echo "Error: Could not determine Rust nightly channel from upstream rust-toolchain.toml"
+            exit 1
+          fi
+          echo "Upstream Rust nightly channel: nightly-$RUST_CHANNEL"
+
+          CURRENT_CHANNEL=$(grep -oE 'nightly\."[0-9]{4}-[0-9]{2}-[0-9]{2}"' flake.nix | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          if [ "$CURRENT_CHANNEL" != "$RUST_CHANNEL" ]; then
+            echo "Updating Rust toolchain pin: nightly-$CURRENT_CHANNEL -> nightly-$RUST_CHANNEL"
+            # Update both the documenting comment (nightly-DATE) and the pin (nightly."DATE")
+            $GSED -i -E "s|nightly-[0-9]{4}-[0-9]{2}-[0-9]{2}|nightly-$RUST_CHANNEL|g" flake.nix
+            $GSED -i -E "s|nightly\.\"[0-9]{4}-[0-9]{2}-[0-9]{2}\"|nightly.\"$RUST_CHANNEL\"|" flake.nix
+            # Refresh rust-overlay so the new nightly toolchain is available
+            nix flake update rust-overlay
+          else
+            echo "Rust toolchain already up to date (nightly-$RUST_CHANNEL)"
+          fi
 
           # Update version (only first occurrence)
           $GSED -i "0,/version = \"[^\"]*\"/s//version = \"$NEW_VERSION\"/" flake.nix
