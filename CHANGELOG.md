@@ -13,6 +13,14 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 
 ## [Unreleased]
 
+## [0.1.23-nix.1] - 2026-06-01
+
+### Changed
+
+- Update vite-plus to v0.1.23
+- Bump Rust toolchain to `nightly-2026-05-24` to match upstream `rust-toolchain.toml` (v0.1.23 requires the newer `c_variadic` `VaList::next_arg` API)
+- Update `rust-overlay` input so the new nightly toolchain is available
+
 ## [0.1.22-nix.1] - 2026-05-21
 
 ### Changed
@@ -262,7 +270,8 @@ This project uses the format: `<vite-plus-version>-nix.<revision>`
 - Automated version update workflow
 - Automatic tag creation on release
 
-[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.22-nix.1...HEAD
+[Unreleased]: https://github.com/naitokosuke/vp-nix/compare/0.1.23-nix.1...HEAD
+[0.1.23-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.22-nix.1...0.1.23-nix.1
 [0.1.22-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.21-alpha.7-nix.1...0.1.22-nix.1
 [0.1.21-alpha.7-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.21-alpha.6-nix.1...0.1.21-alpha.7-nix.1
 [0.1.21-alpha.6-nix.1]: https://github.com/naitokosuke/vp-nix/compare/0.1.21-alpha.5-nix.1...0.1.21-alpha.6-nix.1
