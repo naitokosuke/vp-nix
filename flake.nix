@@ -115,7 +115,7 @@
               pname = "vite-plus-pnpm-deps";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-qeAvLPBq1JcqXoZ1rs0FwdPb/16OKDZII+qONORTDDU="; # pnpmDepsHash
+              hash = "sha256-VrYsdrm58RhC4V4vblJfJZMqrFwixF6X7s6x83aOczg="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
