@@ -220,6 +220,19 @@ jobs:
           nix build .#vite-plus --no-link --print-build-logs
           echo "Build successful"
 
+      # When no update is needed the steps above are skipped, so the scheduled
+      # run would report success without ever building anything. Always verify
+      # that the currently pinned version still builds, so toolchain drift
+      # (e.g. upstream requiring a newer nightly than flake.nix pins) is caught
+      # here instead of silently passing.
+      - name: Verify current build
+        if: steps.check.outputs.needs_update == 'false'
+        run: |
+          set -e
+          echo "No update needed; verifying the currently pinned build still works..."
+          nix build .#vite-plus --no-link --print-build-logs
+          echo "Current build successful"
+
       - name: Create Pull Request
         if: steps.check.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v8
