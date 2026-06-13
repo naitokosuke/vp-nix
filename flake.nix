@@ -16,6 +16,8 @@
       rust-overlay,
     }:
     let
+      inherit (nixpkgs) lib;
+
       supportedSystems = [
         "aarch64-darwin"
         "x86_64-darwin"
@@ -23,15 +25,33 @@
         "x86_64-linux"
       ];
 
-      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      forAllSystems = lib.genAttrs supportedSystems;
+
+      # Single source of truth for nixpkgs per system. The rust-overlay is
+      # harmless for the formatter/devShell/checks and keeps every output on
+      # the same package set.
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
+
+      # The workspace references packages/cli/binding which depends on
+      # rolldown/ (not present in the source tree). Remove the member and all
+      # rolldown path dependencies so cargo can resolve the workspace. Shared
+      # by the cargo-vendor FOD and the final build so the two cannot drift.
+      patchWorkspace = ''
+        substituteInPlace Cargo.toml \
+          --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
+                         'members = ["crates/*"]'
+        sed -i '/path = "\.\/rolldown\//d' Cargo.toml
+      '';
 
       mkVitePlus =
         system:
         let
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [ rust-overlay.overlays.default ];
-          };
+          pkgs = pkgsFor system;
 
           # Project requires nightly Rust (rust-toolchain.toml: nightly-2026-05-24)
           rustToolchain = pkgs.rust-bin.nightly."2026-05-24".minimal;
@@ -49,12 +69,11 @@
             hash = "sha256-pGbCe+Aw2fwZSw+ESZphP3Zymo/NceieTRHzhedGduE=";
           };
 
-          # fspy build.rs downloads these binaries via curl at build time.
-          # Pre-fetch them and provide a curl wrapper to satisfy the sandbox.
-          #
-          # Platform mapping for oils-for-unix and uutils-coreutils.
-          # oils-for-unix only provides macOS binaries; on Linux the build uses
-          # the system-provided oils package instead.
+          # fspy build.rs downloads these binaries via curl at build time, but
+          # only on macOS: build.rs returns early when CARGO_CFG_TARGET_OS is
+          # not "macos", and on Linux fspy uses seccomp-based syscall
+          # interception instead. So no external binaries are fetched or used
+          # on Linux and the entries below are null there.
           platformBinaries = {
             "aarch64-darwin" = {
               oils = {
@@ -76,19 +95,15 @@
                 hash = "sha256-bkvoQp7+hsmmAkeuepMCIe0RdwqXX7S2/Qn/jTm5oVw=";
               };
             };
+            # fspy uses seccomp on Linux, not the macOS preload + bundled
+            # binaries, so nothing is downloaded here.
             "aarch64-linux" = {
-              oils = null; # oils-for-unix does not publish Linux binaries; use system oils
-              coreutils = {
-                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-aarch64-unknown-linux-gnu.tar.gz";
-                hash = "sha256-AhoMGXe6FXnV6BMgAiFVibBrSkD7DhtiyZI6c7xy3uU=";
-              };
+              oils = null;
+              coreutils = null;
             };
             "x86_64-linux" = {
-              oils = null; # oils-for-unix does not publish Linux binaries; use system oils
-              coreutils = {
-                url = "https://github.com/uutils/coreutils/releases/download/0.4.0/coreutils-0.4.0-x86_64-unknown-linux-gnu.tar.gz";
-                hash = "sha256-cmgJHJaMeSidiwge2ljnONEvmDrrY8vzBgmvYp+CJVQ=";
-              };
+              oils = null;
+              coreutils = null;
             };
           };
 
@@ -97,7 +112,11 @@
           oils-for-unix =
             if binaries.oils != null then pkgs.fetchurl { inherit (binaries.oils) url hash; } else null;
 
-          uutils-coreutils = pkgs.fetchurl { inherit (binaries.coreutils) url hash; };
+          uutils-coreutils =
+            if binaries.coreutils != null then
+              pkgs.fetchurl { inherit (binaries.coreutils) url hash; }
+            else
+              null;
 
           # Build pnpm dependencies as a separate derivation.
           # The lock file (pnpm/pnpm-lock.yaml) pins exact versions.
@@ -127,25 +146,18 @@
             '';
           };
 
-          fakeCurl = pkgs.writeShellScriptBin "curl" (
-            ''
-              for arg in "$@"; do url="$arg"; done
-              case "$url" in
-            ''
-            + (
-              if oils-for-unix != null then
-                ''
-                  *oils-for-unix*) cat "${oils-for-unix}" ;;
-                ''
-              else
-                ""
-            )
-            + ''
+          # fspy's build.rs fetches the bundled binaries with curl. This only
+          # runs on macOS (fakeCurl is restricted to Darwin in nativeBuildInputs
+          # below), where both oils and coreutils are always present, so no
+          # conditional is needed here.
+          fakeCurl = pkgs.writeShellScriptBin "curl" ''
+            for arg in "$@"; do url="$arg"; done
+            case "$url" in
+              *oils-for-unix*) cat "${oils-for-unix}" ;;
               *coreutils*) cat "${uutils-coreutils}" ;;
-                *) echo "fakeCurl: unknown URL: $url" >&2; exit 1 ;;
-              esac
-            ''
-          );
+              *) echo "fakeCurl: unknown URL: $url" >&2; exit 1 ;;
+            esac
+          '';
 
           # Use cargo vendor directly via a fixed-output derivation.
           # nixpkgs' fetchCargoVendor and importCargoLock both fail when
@@ -163,12 +175,7 @@
             postUnpack = ''
               cp $sourceRoot/Cargo.lock $TMPDIR/original-Cargo.lock
             '';
-            postPatch = ''
-              substituteInPlace Cargo.toml \
-                --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
-                               'members = ["crates/*"]'
-              sed -i '/path = "\.\/rolldown\//d' Cargo.toml
-            '';
+            postPatch = patchWorkspace;
             buildPhase = ''
               export HOME=$TMPDIR
               export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
@@ -194,17 +201,12 @@
             "-p"
             "vite_global_cli"
           ];
-          nativeBuildInputs = [ fakeCurl ];
 
-          # The workspace references packages/cli/binding which depends on
-          # rolldown/ (not present in the source tree). Remove the member and
-          # all rolldown path dependencies so cargo can resolve the workspace.
-          postPatch = ''
-            substituteInPlace Cargo.toml \
-              --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
-                             'members = ["crates/*"]'
-            sed -i '/path = "\.\/rolldown\//d' Cargo.toml
-          '';
+          # fakeCurl is only needed on macOS, where fspy's build.rs downloads
+          # bundled binaries. Linux uses seccomp and fetches nothing.
+          nativeBuildInputs = lib.optionals pkgs.stdenv.isDarwin [ fakeCurl ];
+
+          postPatch = patchWorkspace;
 
           postInstall = ''
             cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
@@ -224,42 +226,39 @@
           meta = {
             description = "Unified toolchain for JavaScript";
             homepage = "https://github.com/voidzero-dev/vite-plus";
-            license = pkgs.lib.licenses.mit;
+            license = lib.licenses.mit;
             maintainers = [ { github = "naitokosuke"; } ];
             mainProgram = "vp";
           };
         };
     in
-    let
-      systemOutputs = forAllSystems (
+    {
+      packages = forAllSystems (
         system:
         let
           vp = mkVitePlus system;
+        in
+        {
+          vite-plus = vp;
+          default = vp;
+        }
+      );
+
+      apps = forAllSystems (
+        system:
+        let
           app = {
             type = "app";
-            program = "${vp}/bin/vp";
-            meta = {
-              description = "Unified toolchain for JavaScript";
-              mainProgram = "vp";
-            };
+            program = lib.getExe self.packages.${system}.default;
           };
         in
         {
-          packages = {
-            vite-plus = vp;
-            default = vp;
-          };
-          apps = {
-            vite-plus = app;
-            default = app;
-          };
+          vite-plus = app;
+          default = app;
         }
       );
-    in
-    {
-      packages = nixpkgs.lib.mapAttrs (_: v: v.packages) systemOutputs;
-      apps = nixpkgs.lib.mapAttrs (_: v: v.apps) systemOutputs;
-      formatter = forAllSystems (system: (import nixpkgs { inherit system; }).nixfmt);
+
+      formatter = forAllSystems (system: (pkgsFor system).nixfmt);
 
       overlays.default = final: prev: {
         vite-plus = self.packages.${final.system}.vite-plus;
@@ -268,14 +267,15 @@
       devShells = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = pkgsFor system;
         in
         {
           default = pkgs.mkShell {
+            # Tools for reproducing the automated update locally. The update
+            # workflow itself uses nix-prefetch-url (built into Nix) plus pnpm.
             packages = [
               pkgs.nodejs
-              pkgs.nix-prefetch
-              pkgs.prefetch-npm-deps
+              pkgs.pnpm_10
             ];
           };
         }
@@ -284,11 +284,11 @@
       checks = forAllSystems (
         system:
         let
-          vite-plus = mkVitePlus system;
+          pkgs = pkgsFor system;
         in
         {
-          vite-plus-version = nixpkgs.legacyPackages.${system}.runCommand "vite-plus-version-check" {} ''
-            ${vite-plus}/bin/vp --version
+          vite-plus-version = pkgs.runCommand "vite-plus-version-check" { } ''
+            ${self.packages.${system}.vite-plus}/bin/vp --version
             touch $out
           '';
         }

@@ -39,11 +39,10 @@ jobs:
         include:
           - os: macos-latest   # aarch64-darwin
             system: aarch64-darwin
-          # Additional platforms can be enabled once binary hashes are filled in:
-          # - os: macos-13       # x86_64-darwin
-          #   system: x86_64-darwin
-          # - os: ubuntu-latest  # x86_64-linux
-          #   system: x86_64-linux
+          - os: ubuntu-latest  # x86_64-linux
+            system: x86_64-linux
+          # x86_64-darwin (macos-13) and aarch64-linux are defined in the flake
+          # but have no standard GitHub-hosted runners, so they are not built in CI.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -57,21 +56,25 @@ jobs:
           name: vp-nix
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build vite-plus
-        run: nix build .#vite-plus --print-build-logs
-
-      - name: Test vp runs
-        run: nix run .#vite-plus -- --version
+      # nix flake check evaluates all flake outputs and builds this system's
+      # checks. checks.${system}.vite-plus-version already runs `vp --version`,
+      # which depends on the full package build, so this covers build + smoke test.
+      - name: Run flake checks
+        run: nix flake check --print-build-logs
 
   ci-complete:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [changes, build]
     if: always()
     steps:
-      - name: Check build result
+      - name: Check results
         run: |
+          if [[ "${{ needs.changes.result }}" == "failure" ]]; then
+            echo "Change detection failed"
+            exit 1
+          fi
           if [[ "${{ needs.build.result }}" == "failure" ]]; then
             echo "Build failed"
             exit 1
           fi
-          echo "CI complete (build: ${{ needs.build.result }})"
+          echo "CI complete (changes: ${{ needs.changes.result }}, build: ${{ needs.build.result }})"
