@@ -2,7 +2,7 @@
 
 Unofficial Nix flake for [vite-plus (vp)](https://github.com/voidzero-dev/vite-plus) -- Unified Toolchain for JavaScript.
 
-Currently supports `aarch64-darwin` only.
+The flake defines `aarch64-darwin`, `x86_64-darwin`, `aarch64-linux`, and `x86_64-linux`. CI verifies builds on `aarch64-darwin` and `x86_64-linux`; the other two are not built in CI because no standard GitHub-hosted runners exist for them.
 
 ## Usage
 
@@ -35,15 +35,20 @@ nix profile install github:naitokosuke/vp-nix
 A GitHub Actions workflow (`update-vp.yml`) runs every 12 hours to check for new vite-plus releases. When a new version is found it:
 
 1. Updates the version and source hash in `flake.nix`
-2. Updates `package.json` and `package-lock.json` for the new npm tarball
-3. Recomputes `npmDepsHash` using `prefetch-npm-deps`
-4. Updates `CHANGELOG.md`
-5. Verifies the build passes
-6. Opens a pull request automatically
+2. Syncs the pinned Rust nightly toolchain with the upstream `rust-toolchain.toml`
+3. Updates `pnpm/package.json` and `pnpm/pnpm-lock.yaml`
+4. Recomputes `pnpmDepsHash` and `cargoVendorHash`
+5. Updates `CHANGELOG.md`
+6. Verifies the build passes and opens a pull request automatically
 
-## Why package.json lives in this repository
+## Why the pnpm and vendoring files live in this repository
 
-Nix builds run inside a sandbox with no network access. The `buildNpmPackage` helper needs a `package-lock.json` to produce a fixed-output derivation of npm dependencies (`npmDepsHash`). Because the upstream vite-plus repository does not ship a lock file suitable for this purpose, this flake maintains its own `package.json` / `package-lock.json` that pins the vite-plus npm tarball. The automated update workflow keeps these files in sync whenever a new version is released.
+Nix builds run inside a sandbox with no network access, so all dependencies must be fetched as fixed-output derivations before the build.
+
+- **JavaScript deps:** `fetchPnpmDeps` needs a lock file to produce a reproducible `node_modules` (`pnpmDepsHash`). Because upstream does not ship a lock file suitable for this purpose, this flake maintains its own `pnpm/package.json` / `pnpm/pnpm-lock.yaml` pinning the vite-plus package.
+- **Rust deps:** crates are vendored with `cargo vendor` into a fixed-output derivation (`cargoVendorHash`); this handles a crate that appears from both crates.io and a git source, which the nixpkgs `fetchCargoVendor`/`importCargoLock` helpers cannot.
+
+The automated update workflow keeps all of these in sync whenever a new version is released.
 
 ## License
 
