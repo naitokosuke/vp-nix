@@ -27,9 +27,6 @@
 
       forAllSystems = lib.genAttrs supportedSystems;
 
-      # Single source of truth for nixpkgs per system. The rust-overlay is
-      # harmless for the formatter/devShell/checks and keeps every output on
-      # the same package set.
       pkgsFor =
         system:
         import nixpkgs {
@@ -37,10 +34,9 @@
           overlays = [ rust-overlay.overlays.default ];
         };
 
-      # The workspace references packages/cli/binding which depends on
-      # rolldown/ (not present in the source tree). Remove the member and all
-      # rolldown path dependencies so cargo can resolve the workspace. Shared
-      # by the cargo-vendor FOD and the final build so the two cannot drift.
+      # rolldown/ and packages/cli/binding are absent from the published source
+      # tree, so drop them before cargo resolves the workspace. Shared between
+      # the cargo-vendor FOD and the build so the two patches cannot drift.
       patchWorkspace = ''
         substituteInPlace Cargo.toml \
           --replace-fail 'members = ["bench", "crates/*", "packages/cli/binding"]' \
@@ -53,7 +49,7 @@
         let
           pkgs = pkgsFor system;
 
-          # Project requires nightly Rust (rust-toolchain.toml: nightly-2026-05-24)
+          # Pinned nightly from upstream rust-toolchain.toml (synced by update-vp.yml).
           rustToolchain = pkgs.rust-bin.nightly."2026-05-24".minimal;
 
           rustPlatform = pkgs.makeRustPlatform {
@@ -69,11 +65,9 @@
             hash = "sha256-pGbCe+Aw2fwZSw+ESZphP3Zymo/NceieTRHzhedGduE=";
           };
 
-          # fspy build.rs downloads these binaries via curl at build time, but
-          # only on macOS: build.rs returns early when CARGO_CFG_TARGET_OS is
-          # not "macos", and on Linux fspy uses seccomp-based syscall
-          # interception instead. So no external binaries are fetched or used
-          # on Linux and the entries below are null there.
+          # fspy's build.rs only downloads these via curl on macOS; it returns
+          # early on other targets and uses seccomp on Linux, so they are null
+          # there and nothing is fetched.
           platformBinaries = {
             "aarch64-darwin" = {
               oils = {
@@ -95,8 +89,6 @@
                 hash = "sha256-bkvoQp7+hsmmAkeuepMCIe0RdwqXX7S2/Qn/jTm5oVw=";
               };
             };
-            # fspy uses seccomp on Linux, not the macOS preload + bundled
-            # binaries, so nothing is downloaded here.
             "aarch64-linux" = {
               oils = null;
               coreutils = null;
@@ -118,8 +110,6 @@
             else
               null;
 
-          # Build pnpm dependencies as a separate derivation.
-          # The lock file (pnpm/pnpm-lock.yaml) pins exact versions.
           vitePlusNodeModules = pkgs.stdenv.mkDerivation {
             pname = "vite-plus-pnpm-deps";
             inherit version;
@@ -146,10 +136,9 @@
             '';
           };
 
-          # fspy's build.rs fetches the bundled binaries with curl. This only
-          # runs on macOS (fakeCurl is restricted to Darwin in nativeBuildInputs
-          # below), where both oils and coreutils are always present, so no
-          # conditional is needed here.
+          # fspy's build.rs fetches the bundled binaries with curl, which the
+          # sandbox blocks; this wrapper serves the pre-fetched files instead.
+          # Only used on macOS (see nativeBuildInputs), where both are present.
           fakeCurl = pkgs.writeShellScriptBin "curl" ''
             for arg in "$@"; do url="$arg"; done
             case "$url" in
@@ -159,11 +148,9 @@
             esac
           '';
 
-          # Use cargo vendor directly via a fixed-output derivation.
-          # nixpkgs' fetchCargoVendor and importCargoLock both fail when
-          # the same crate name+version appears from crates.io AND a git
-          # source (brush-parser-0.3.0). cargo vendor handles this natively
-          # by appending a hash suffix to disambiguate.
+          # fetchCargoVendor and importCargoLock both choke when the same
+          # crate name+version comes from both crates.io and a git source
+          # (brush-parser-0.3.0); cargo vendor disambiguates with a hash suffix.
           cargoVendorDir = pkgs.stdenv.mkDerivation {
             name = "vite-plus-${version}-cargo-vendor";
             inherit src;
@@ -202,8 +189,6 @@
             "vite_global_cli"
           ];
 
-          # fakeCurl is only needed on macOS, where fspy's build.rs downloads
-          # bundled binaries. Linux uses seccomp and fetches nothing.
           nativeBuildInputs = lib.optionals pkgs.stdenv.isDarwin [ fakeCurl ];
 
           postPatch = patchWorkspace;
@@ -211,11 +196,9 @@
           postInstall = ''
             cp -r --no-preserve=mode ${vitePlusNodeModules}/node_modules $out/
 
-            # Files in the Nix store are pinned to 0444 by fixupPhase.
-            # `vp create` copies templates with fs.copyFileSync, which
-            # preserves the source mode, so the destination ends up 0444
-            # and the subsequent editJsonFile call fails with EACCES.
-            # Patch the copy helper to chmod each file to 0644 right after.
+            # The store pins files to 0444, but `vp create` copies templates
+            # with fs.copyFileSync (mode-preserving) and then editJsonFile fails
+            # with EACCES on the read-only copy. Chmod each copied file to 0644.
             substituteInPlace $out/node_modules/vite-plus/dist/create/bin.js \
               --replace-fail 'else fs.copyFileSync(src, dest);' \
                              'else { fs.copyFileSync(src, dest); fs.chmodSync(dest, 0o644); }'
@@ -271,8 +254,6 @@
         in
         {
           default = pkgs.mkShell {
-            # Tools for reproducing the automated update locally. The update
-            # workflow itself uses nix-prefetch-url (built into Nix) plus pnpm.
             packages = [
               pkgs.nodejs
               pkgs.pnpm_10
@@ -288,6 +269,9 @@
         in
         {
           vite-plus-version = pkgs.runCommand "vite-plus-version-check" { } ''
+            # vp builds an HTTPS client on startup and aborts when no CA certs
+            # are found (a hard error on Linux), so point it at a bundle.
+            export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
             ${self.packages.${system}.vite-plus}/bin/vp --version
             touch $out
           '';
