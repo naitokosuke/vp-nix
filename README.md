@@ -34,19 +34,17 @@ nix profile install github:naitokosuke/vp-nix
 
 A GitHub Actions workflow (`update-vp.yml`) runs every 12 hours to check for new vite-plus releases. When a new version is found it:
 
-1. Updates the version and source hash in `flake.nix`
-2. Syncs the pinned Rust nightly toolchain with the upstream `rust-toolchain.toml`
-3. Updates `pnpm/package.json` and `pnpm/pnpm-lock.yaml`
-4. Recomputes `pnpmDepsHash` and `cargoVendorHash`
-5. Updates `CHANGELOG.md`
-6. Verifies the build passes and opens a pull request automatically
+1. Updates the version in `flake.nix`
+2. Updates `pnpm/package.json` and `pnpm/pnpm-lock.yaml`
+3. Recomputes `pnpmDepsHash`
+4. Updates `CHANGELOG.md`
+5. Verifies the build passes and opens a pull request automatically
 
-## Why the pnpm and vendoring files live in this repository
+## Why the pnpm files live in this repository
 
-Nix builds run inside a sandbox with no network access, so all dependencies must be fetched as fixed-output derivations before the build.
+Nix builds run inside a sandbox with no network access, so all dependencies must be fetched as a fixed-output derivation before the build. `fetchPnpmDeps` needs a lock file to produce a reproducible `node_modules` (`pnpmDepsHash`). Because upstream does not ship a lock file suitable for this purpose, this flake maintains its own `pnpm/package.json` / `pnpm/pnpm-lock.yaml` pinning the vite-plus package.
 
-- **JavaScript deps:** `fetchPnpmDeps` needs a lock file to produce a reproducible `node_modules` (`pnpmDepsHash`). Because upstream does not ship a lock file suitable for this purpose, this flake maintains its own `pnpm/package.json` / `pnpm/pnpm-lock.yaml` pinning the vite-plus package.
-- **Rust deps:** crates are vendored with `cargo vendor` into a fixed-output derivation (`cargoVendorHash`); this handles a crate that appears from both crates.io and a git source, which the nixpkgs `fetchCargoVendor`/`importCargoLock` helpers cannot.
+vite-plus ships its native binary as prebuilt per-platform npm packages (`@voidzero-dev/vite-plus-<platform>`) that pnpm fetches as part of those deps, so the flake just wraps the prebuilt launcher under a pinned Node.js and needs no Rust toolchain.
 
 The automated update workflow keeps all of these in sync whenever a new version is released.
 
