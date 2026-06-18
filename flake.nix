@@ -50,19 +50,19 @@
           pkgs = pkgsFor system;
 
           # Pinned nightly from upstream rust-toolchain.toml (synced by update-vp.yml).
-          rustToolchain = pkgs.rust-bin.nightly."2026-05-24".minimal;
+          rustToolchain = pkgs.rust-bin.nightly."2026-06-10".minimal;
 
           rustPlatform = pkgs.makeRustPlatform {
             cargo = rustToolchain;
             rustc = rustToolchain;
           };
 
-          version = "0.1.24";
+          version = "0.2.0";
           src = pkgs.fetchFromGitHub {
             owner = "voidzero-dev";
             repo = "vite-plus";
             rev = "v${version}";
-            hash = "sha256-pGbCe+Aw2fwZSw+ESZphP3Zymo/NceieTRHzhedGduE=";
+            hash = "sha256-tn9oclrxtnHMlUTQB7GUAzXhRwOvwsM5L/Z+735edeM=";
           };
 
           # fspy's build.rs only downloads these via curl on macOS; it returns
@@ -124,7 +124,7 @@
               pname = "vite-plus-pnpm-deps";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-zrrk6xs7zkbh++vOPwDyRCgBuW+hSsfaTnnlUsRFRMg="; # pnpmDepsHash
+              hash = "sha256-Y8JpqrC3jbtfH08INv9GhBArnALoBE9P5blLcIuKwJ4="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
@@ -175,7 +175,7 @@
             dontFixup = true;
             outputHashMode = "recursive";
             outputHashAlgo = "sha256";
-            outputHash = "sha256-e6rseTRsunne5qiE4lKJkRfhf+klsC5fXGqY3lCkB6I="; # cargoVendorHash
+            outputHash = "sha256-Z3nzxdC5i999gqgIibD6EHYPpO1NWhEdAThbbzwDVA0="; # cargoVendorHash
           };
 
         in
