@@ -79,8 +79,6 @@
               --replace-fail 'else fs.copyFileSync(src, dest);' \
                              'else { fs.copyFileSync(src, dest); fs.chmodSync(dest, 0o644); }'
 
-            # The published bin entries are `#!/usr/bin/env node` launchers; wrap
-            # them to run under this pinned nodejs without relying on PATH.
             for b in vp oxfmt oxlint; do
               makeWrapper ${nodejs}/bin/node $out/bin/$b \
                 --add-flags $out/lib/node_modules/vite-plus/bin/$b
