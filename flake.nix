@@ -26,7 +26,7 @@
         let
           pkgs = pkgsFor system;
           nodejs = pkgs.nodejs_24;
-          version = "0.2.0";
+          version = "0.2.1";
 
           # Upstream ships prebuilt per-platform binaries on npm via
           # optionalDependencies (@voidzero-dev/vite-plus-<platform>: a napi
@@ -46,7 +46,7 @@
               pname = "vite-plus-node-modules";
               inherit version;
               src = ./pnpm;
-              hash = "sha256-Y8JpqrC3jbtfH08INv9GhBArnALoBE9P5blLcIuKwJ4="; # pnpmDepsHash
+              hash = "sha256-Ze7KwrlfRm8JC74frZYEH8KGmEsM7YrS4KGbCuWxRrc="; # pnpmDepsHash
               fetcherVersion = 3;
             };
 
